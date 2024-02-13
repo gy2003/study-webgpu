@@ -2,6 +2,7 @@ import {createBrowserRouter} from 'react-router-dom';
 
 import App from "./App";
 import GameOfLife from './pages/gameOfLife';
+import ArtShader from "./pages/artShader";
 
 export const router = createBrowserRouter([
   {
@@ -11,6 +12,10 @@ export const router = createBrowserRouter([
       {
         path: "game-of-life",
         element: <GameOfLife />
+      },
+      {
+        path: "art-shader",
+        element: <ArtShader />
       }
     ],
   }
