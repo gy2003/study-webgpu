@@ -7,7 +7,17 @@ struct Camera {
 struct Ray {
   origin: vec3f,
   direction: vec3f,
+}
 
+struct HitRecord {
+  p: vec3f,
+  normal: vec3f,
+  t: f32,
+}
+
+struct Sphere {
+  center: vec3f,
+  radius: f32,
 }
 
 @group(0) @binding(0) var imageTexture: texture_storage_2d<rgba8unorm, write>;
@@ -37,6 +47,13 @@ fn genRay(origin: vec3f, direction: vec3f) -> Ray {
   return ray;
 }
 
+fn genSphere(center: vec3f, radius: f32) -> Sphere {
+  var sphere: Sphere;
+  sphere.center = center;
+  sphere.radius = radius;
+  return sphere;
+}
+
 fn rayAt(ray: Ray, t: f32) -> vec3f {
   return ray.origin + t * ray.direction;
 }
@@ -52,6 +69,33 @@ fn rayColor(ray: Ray) -> vec4f {
   let a = 0.5 * (ray.direction.y + 1.0);
   let color = (1.0 - a) * vec3f(1.0, 1.0, 1.0) + a * vec3f(0.5, 0.7, 1.0);
   return vec4f(color, 1.0);
+}
+
+fn sphere_hit(r: Ray, ray_tmin: f32, ray_tmax: f32, rec: ptr<function, HitRecord>, sphere: Sphere) -> bool {
+  let oc = r.origin - sphere.center;
+  let a = dot(r.direction, r.direction);
+  let half_b = dot(oc, r.direction);
+  let c = dot(oc, oc) - sphere.radius * sphere.radius;
+
+  let discriminant = half_b * half_b - a * c;
+  if (discriminant < 0.0) {
+    return false;
+  }
+  let sqrtd = sqrt(discriminant);
+
+  var root = (-half_b - sqrtd) / a;
+  if (root <= ray_tmin || root >= ray_tmax) {
+    root = (-half_b + sqrtd) / a;
+    if (root <= ray_tmin || root >= ray_tmax) {
+      return false;
+    }
+  }
+
+  (*rec).t = root;
+  (*rec).p = rayAt(r, root);
+  (*rec).normal = ((*rec).p - sphere.center) / sphere.radius;
+
+  return true;
 }
 
 fn hit_sphere(center: vec3f, radius: f32, ray: Ray) -> f32 {
