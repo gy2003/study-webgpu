@@ -1,3 +1,6 @@
+const WorldLength = 2;
+const Infinity: f32 = 0x1p+127f; // https://www.w3.org/TR/WGSL/#f32
+
 struct Camera {
   cameraPos: vec3f,
   scale: f32,
@@ -13,6 +16,7 @@ struct HitRecord {
   p: vec3f,
   normal: vec3f,
   t: f32,
+  frontFace: bool,
 }
 
 struct Sphere {
@@ -22,6 +26,7 @@ struct Sphere {
 
 @group(0) @binding(0) var imageTexture: texture_storage_2d<rgba8unorm, write>;
 @group(0) @binding(1) var<uniform> camera: Camera;
+@group(0) @binding(2) var<storage> world: array<Sphere, WorldLength>;
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) id: vec3u) {
@@ -47,11 +52,14 @@ fn genRay(origin: vec3f, direction: vec3f) -> Ray {
   return ray;
 }
 
-fn genSphere(center: vec3f, radius: f32) -> Sphere {
-  var sphere: Sphere;
-  sphere.center = center;
-  sphere.radius = radius;
-  return sphere;
+fn setFaceNormal(r: Ray, outwardNormal: vec3f, rec: ptr<function, HitRecord>) {
+  (*rec).frontFace = dot(r.direction, outwardNormal) < 0.0;
+
+  if ((*rec).frontFace) {
+    (*rec).normal = outwardNormal;
+  } else {
+    (*rec).normal = -outwardNormal;
+  }
 }
 
 fn rayAt(ray: Ray, t: f32) -> vec3f {
@@ -59,10 +67,9 @@ fn rayAt(ray: Ray, t: f32) -> vec3f {
 }
 
 fn rayColor(ray: Ray) -> vec4f {
-  let t = hit_sphere(vec3f(0.0, 0.0, -1.0), 0.5, ray);
-  if (t > 0.0) {
-    let N = normalize(rayAt(ray, t) - vec3f(0.0, 0.0, -1.0));
-    let color = 0.5 * vec3f(N.x + 1.0, N.y + 1.0, N.z + 1.0);
+  var rec: HitRecord;
+  if (hittableList(ray, 0.0, Infinity, &rec)) {
+    let color = 0.5 * (rec.normal + vec3f(1.0, 1.0, 1.0));;
     return vec4f(color, 1.0);
   }
 
@@ -93,9 +100,27 @@ fn sphere_hit(r: Ray, ray_tmin: f32, ray_tmax: f32, rec: ptr<function, HitRecord
 
   (*rec).t = root;
   (*rec).p = rayAt(r, root);
-  (*rec).normal = ((*rec).p - sphere.center) / sphere.radius;
+  let outwardNormal = ((*rec).p - sphere.center) / sphere.radius;
+  setFaceNormal(r, outwardNormal, rec);
 
   return true;
+}
+
+fn hittableList(r: Ray, rayTmin: f32, rayTmax: f32, rec: ptr<function, HitRecord>) -> bool {
+  var tempRec: HitRecord;
+  var hitAnything = false;
+  var closestSoFar = rayTmax;
+
+  for (var i: i32 = 0; i < WorldLength; i++) {
+    var object = world[i];
+    if (sphere_hit(r, rayTmin, closestSoFar, &tempRec, object)) {
+      hitAnything = true;
+      closestSoFar = tempRec.t;
+      *rec = tempRec;
+    }
+  }
+
+  return hitAnything;
 }
 
 fn hit_sphere(center: vec3f, radius: f32, ray: Ray) -> f32 {

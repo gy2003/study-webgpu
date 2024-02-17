@@ -1,6 +1,8 @@
 import {getCanvasInfo} from '../../utils';
 import type {CanvasInfo} from '../../utils';
 import {Camera} from "./camera";
+import {Sphere} from "./sphere";
+import {HittableList} from "./hittable";
 import computeShader from "./shader/compute.wgsl?raw";
 import renderShader from "./shader/render.wgsl?raw";
 
@@ -23,6 +25,9 @@ class RayTracing {
 
   computeBindGroup!: GPUBindGroup;
   computeBindGroupLayout!: GPUBindGroupLayout;
+
+  textureForMultisampling!: GPUTexture;
+  textureForMultisamplingView!: GPUTextureView;
 
   computePipeline!: GPUComputePipeline;
   renderPipeline!: GPURenderPipeline;
@@ -103,6 +108,12 @@ class RayTracing {
   createComputeBindGroup() {
     const {device} = this.canvasInfo;
 
+    const world = new HittableList();
+    world.add(new Sphere([0, 0, -1], 0.5));
+    world.add(new Sphere([0,-100.5,-1], 100));
+
+    const worldBuffer = world.getObjectsBuffer(device);
+
     this.computeBindGroupLayout = device.createBindGroupLayout({
       entries: [
         {
@@ -116,6 +127,13 @@ class RayTracing {
           binding: 1,
           visibility: GPUShaderStage.COMPUTE,
           buffer: {},
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {
+            type: "read-only-storage"
+          },
         }
       ],
     });
@@ -125,6 +143,7 @@ class RayTracing {
       entries: [
         {binding: 0, resource: this.imageTexture.createView()},
         {binding: 1, resource: {buffer: this.cameraBuffer}},
+        {binding: 2, resource: {buffer: worldBuffer}},
       ],
     });
   }
@@ -173,7 +192,7 @@ class RayTracing {
   }
 
   createRenderPipeline() {
-    const {device, format} = this.canvasInfo;
+    const {device, format, canvas} = this.canvasInfo;
 
     const renderModule = device.createShaderModule({code: renderShader});
 
@@ -192,8 +211,23 @@ class RayTracing {
         module: renderModule,
         entryPoint: "fragmentMain",
         targets: [{format}],
+      },
+      multisample: {
+        count: 4,
       }
     });
+
+    this.textureForMultisampling = device.createTexture({
+      label: "textureForMultisampling",
+      size: {
+        width: canvas.width,
+        height: canvas.height,
+      },
+      sampleCount: 4,
+      format,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    this.textureForMultisamplingView = this.textureForMultisampling.createView();
   }
 
   render() {
@@ -211,7 +245,8 @@ class RayTracing {
 
     const renderPass = enconder.beginRenderPass({
       colorAttachments: [{
-        view: context.getCurrentTexture().createView(),
+        view: this.textureForMultisamplingView,
+        resolveTarget: context.getCurrentTexture().createView(),
         clearValue: [0, 0, 0, 1],
         loadOp: "clear",
         storeOp: "store",
