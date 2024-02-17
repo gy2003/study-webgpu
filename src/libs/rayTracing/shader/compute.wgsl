@@ -136,3 +136,8 @@ fn hit_sphere(center: vec3f, radius: f32, ray: Ray) -> f32 {
     return (-half_b - sqrt(discriminant)) / a;
   }
 }
+
+// https://godotshaders.com/snippet/random-value/
+fn random(uv: vec2f) -> f32 {
+  return fract(sin(dot(uv, vec2f(12.9898,78.233))) * 43758.5453123);
+}
