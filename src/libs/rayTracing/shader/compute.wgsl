@@ -141,3 +141,16 @@ fn hit_sphere(center: vec3f, radius: f32, ray: Ray) -> f32 {
 fn random(uv: vec2f) -> f32 {
   return fract(sin(dot(uv, vec2f(12.9898,78.233))) * 43758.5453123);
 }
+
+// https://www.shadertoy.com/view/3tsBzX
+fn hash3(v: vec3f) -> f32 {
+  return fract(sin(dot(v, vec3(64.24232, 87.873, 76.635))) * 10232.0);
+}
+
+// fn randomUnit(v: vec3f) -> vec3f {
+//   return normalize(tan(hash3(v)));
+// }
+
+fn randomDouble(min: f32, max: f32, uv: vec2f) -> f32 {
+  return min + (max - min) * random(uv);
+}
