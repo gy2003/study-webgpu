@@ -231,6 +231,8 @@ class RayTracing {
   }
 
   render() {
+    console.time("renderTime");
+
     const {device, context, canvas} = this.canvasInfo;
     const enconder = device.createCommandEncoder();
 
@@ -259,6 +261,8 @@ class RayTracing {
     renderPass.end();
 
     device.queue.submit([enconder.finish()]);
+
+    console.timeEnd("renderTime");
   }
 }
 

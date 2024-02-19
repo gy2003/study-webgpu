@@ -1,5 +1,6 @@
 const WorldLength = 2;
 const Infinity: f32 = 0x1p+127f; // https://www.w3.org/TR/WGSL/#f32
+const SamplesPerPixel = 10.0;
 
 struct Camera {
   cameraPos: vec3f,
@@ -29,20 +30,28 @@ struct Sphere {
 @group(0) @binding(2) var<storage> world: array<Sphere, WorldLength>;
 
 @compute @workgroup_size(8, 8, 1)
-fn main(@builtin(global_invocation_id) id: vec3u) {
+fn main(@builtin(global_invocation_id) _id: vec3u) {
   let screenSize = textureDimensions(imageTexture);
 
-  if (id.x >= u32(screenSize.x) || id.y >= u32(screenSize.y)) {
+  if (_id.x >= u32(screenSize.x) || _id.y >= u32(screenSize.y)) {
     return;
   }
 
-  let x = (2.0 * (f32(id.x) + 0.5) / f32(screenSize.x) - 1.0) * camera.aspectRaio * camera.scale;
-  let y = (1.0 - 2.0 * (f32(id.y) + 0.5) / f32(screenSize.y)) * camera.scale;
-  let rayDir = normalize(vec3f(x, y, -1.0));
-  let ray = genRay(camera.cameraPos, rayDir);
+  var pixelColor = vec3f(0.0, 0.0, 0.0);
+  for (var i: f32 = 0.0; i < SamplesPerPixel; i += 1.0) {
+    var rx = rand(vec2f(f32(_id.x) + i, f32(_id.y) + i));
+    var ry = rand(vec2f(f32(_id.y) + i, f32(_id.x) + i));
+    var id = vec2f(f32(_id.x) + rx, f32(_id.y) + ry);
 
-  let color = rayColor(ray);
-  textureStore(imageTexture, vec2<i32>(id.xy), color);
+    let x = (2.0 * (id.x + 0.5) / f32(screenSize.x) - 1.0) * camera.aspectRaio * camera.scale;
+    let y = (1.0 - 2.0 * (id.y + 0.5) / f32(screenSize.y)) * camera.scale;
+    let rayDir = normalize(vec3f(x, y, -1.0));
+    let ray = genRay(camera.cameraPos, rayDir);
+    pixelColor += rayColor(ray);
+  }
+
+  pixelColor = pixelColor / SamplesPerPixel;
+  textureStore(imageTexture, vec2<i32>(_id.xy), vec4f(pixelColor, 1.0));
 }
 
 fn genRay(origin: vec3f, direction: vec3f) -> Ray {
@@ -66,16 +75,36 @@ fn rayAt(ray: Ray, t: f32) -> vec3f {
   return ray.origin + t * ray.direction;
 }
 
-fn rayColor(ray: Ray) -> vec4f {
-  var rec: HitRecord;
-  if (hittableList(ray, 0.0, Infinity, &rec)) {
-    let color = 0.5 * (rec.normal + vec3f(1.0, 1.0, 1.0));;
-    return vec4f(color, 1.0);
+fn rayColor(_ray: Ray) -> vec3f {
+  var depth = 50;
+  var ray = _ray;
+  var factor: f32 = 1.0;
+  var resultColor: vec3f;
+
+  loop {
+    if (depth <= 0) {
+      resultColor = vec3f(0.0, 0.0, 0.0);
+      break;
+    }
+    depth--;
+
+    var rec: HitRecord;
+    if (hittableList(ray, 0.001, Infinity, &rec)) {
+      let direction = randomOnHemisphere(rec.p, rec.normal);
+      // let color = 0.5 * (rec.normal + vec3f(1.0, 1.0, 1.0));
+      ray.origin = rec.p;
+      ray.direction = direction;
+      // return vec4f(0.5 * rayColor(r), 1.0);
+      factor = 0.5 * factor;
+      continue;
+    }
+    let a = 0.5 * (ray.direction.y + 1.0);
+    resultColor = (1.0 - a) * vec3f(1.0, 1.0, 1.0) + a * vec3f(0.5, 0.7, 1.0);
+    break;
   }
 
-  let a = 0.5 * (ray.direction.y + 1.0);
-  let color = (1.0 - a) * vec3f(1.0, 1.0, 1.0) + a * vec3f(0.5, 0.7, 1.0);
-  return vec4f(color, 1.0);
+  resultColor = resultColor * factor;
+  return resultColor;
 }
 
 fn sphere_hit(r: Ray, ray_tmin: f32, ray_tmax: f32, rec: ptr<function, HitRecord>, sphere: Sphere) -> bool {
@@ -137,20 +166,48 @@ fn hit_sphere(center: vec3f, radius: f32, ray: Ray) -> f32 {
   }
 }
 
-// https://godotshaders.com/snippet/random-value/
-fn random(uv: vec2f) -> f32 {
-  return fract(sin(dot(uv, vec2f(12.9898,78.233))) * 43758.5453123);
+// https://www.shadertoy.com/view/Xd23Dh
+fn hash3(v: vec2f) -> vec3f {
+  let p = vec3f(
+    dot(v, vec2(127.1, 311.7)),
+    dot(v, vec2(269.5, 183.3)),
+    dot(v, vec2(419.2, 371.9)),
+  );
+  return fract(sin(p) * 43758.5453);
 }
 
-// https://www.shadertoy.com/view/3tsBzX
-fn hash3(v: vec3f) -> f32 {
-  return fract(sin(dot(v, vec3(64.24232, 87.873, 76.635))) * 10232.0);
+fn rand(v: vec2f) -> f32 {
+  var a = 12.9898;
+  var b = 78.233;
+  var c = 43758.5453;
+  var dt = dot(v, vec2f(a, b));
+  var sn = dt % 3.14;
+  return fract(sin(sn) * c);
 }
 
-// fn randomUnit(v: vec3f) -> vec3f {
-//   return normalize(tan(hash3(v)));
-// }
+fn randomInUnitSphere(pos: vec3f) -> vec3f {
+  var p = vec3f(0.0);
+  var max = 1000;
 
-fn randomDouble(min: f32, max: f32, uv: vec2f) -> f32 {
-  return min + (max - min) * random(uv);
+  loop {
+    if (max < 0) {
+      break;
+    }
+    max--;
+    p = 2.0 * vec3f(rand(pos.xy + p.xy), rand(pos.yz + p.yz), rand(pos.xz + p.xz)) - vec3f(1.0);
+    if (dot(p, p) < 1.0) {
+      break;
+    }
+  }
+
+  return p;
+}
+
+fn randomOnHemisphere(pos: vec3f, normal: vec3f) -> vec3f {
+  let onUnitSphere = normalize(randomInUnitSphere(pos));
+  if (dot(onUnitSphere, normal) > 0.0) {
+    return onUnitSphere;
+  } else {
+    return -onUnitSphere;
+  }
 }
