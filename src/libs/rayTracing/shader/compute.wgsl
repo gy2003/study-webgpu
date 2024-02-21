@@ -1,6 +1,6 @@
 const WorldLength = 2;
 const Infinity: f32 = 0x1p+127f; // https://www.w3.org/TR/WGSL/#f32
-const SamplesPerPixel = 10.0;
+const SamplesPerPixel = 60.0;
 
 struct Camera {
   cameraPos: vec3f,
@@ -90,11 +90,14 @@ fn rayColor(_ray: Ray) -> vec3f {
 
     var rec: HitRecord;
     if (hittableList(ray, 0.001, Infinity, &rec)) {
-      let direction = randomOnHemisphere(rec.p, rec.normal);
-      // let color = 0.5 * (rec.normal + vec3f(1.0, 1.0, 1.0));
+      // let direction = randomOnHemisphere(rec.p, rec.normal);
+      /**
+       * Lambertian distribution
+       * https://en.wikipedia.org/wiki/Lambertian_reflectance
+      */
+      let direction = rec.normal + normalize(randomInUnitSphere(rec.p));
       ray.origin = rec.p;
       ray.direction = direction;
-      // return vec4f(0.5 * rayColor(r), 1.0);
       factor = 0.5 * factor;
       continue;
     }
@@ -152,30 +155,7 @@ fn hittableList(r: Ray, rayTmin: f32, rayTmax: f32, rec: ptr<function, HitRecord
   return hitAnything;
 }
 
-fn hit_sphere(center: vec3f, radius: f32, ray: Ray) -> f32 {
-  let oc = ray.origin - center;
-  let a = dot(ray.direction, ray.direction);
-  let half_b = dot(oc, ray.direction);
-  let c = dot(oc, oc) - radius * radius;
-  let discriminant = half_b * half_b - a * c;
-
-  if (discriminant < 0.0) {
-    return -1.0;
-  } else {
-    return (-half_b - sqrt(discriminant)) / a;
-  }
-}
-
-// https://www.shadertoy.com/view/Xd23Dh
-fn hash3(v: vec2f) -> vec3f {
-  let p = vec3f(
-    dot(v, vec2(127.1, 311.7)),
-    dot(v, vec2(269.5, 183.3)),
-    dot(v, vec2(419.2, 371.9)),
-  );
-  return fract(sin(p) * 43758.5453);
-}
-
+// https://github.com/martinweber/learn-opengl-raytrace-weekend/blob/develop/src/shader/compute.glsl#L76
 fn rand(v: vec2f) -> f32 {
   var a = 12.9898;
   var b = 78.233;
