@@ -1,6 +1,7 @@
 const WorldLength = 2;
 const Infinity: f32 = 0x1p+127f; // https://www.w3.org/TR/WGSL/#f32
 const SamplesPerPixel = 60.0;
+const PI = 3.1415926535;
 
 struct Camera {
   cameraPos: vec3f,
@@ -29,6 +30,8 @@ struct Sphere {
 @group(0) @binding(1) var<uniform> camera: Camera;
 @group(0) @binding(2) var<storage> world: array<Sphere, WorldLength>;
 
+var<private> randState: vec2f;
+
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) _id: vec3u) {
   let screenSize = textureDimensions(imageTexture);
@@ -36,6 +39,8 @@ fn main(@builtin(global_invocation_id) _id: vec3u) {
   if (_id.x >= u32(screenSize.x) || _id.y >= u32(screenSize.y)) {
     return;
   }
+
+  randState = vec2f(_id.xy / screenSize.xy);
 
   var pixelColor = vec3f(0.0, 0.0, 0.0);
   for (var i: f32 = 0.0; i < SamplesPerPixel; i += 1.0) {
@@ -155,13 +160,18 @@ fn hittableList(r: Ray, rayTmin: f32, rayTmax: f32, rec: ptr<function, HitRecord
   return hitAnything;
 }
 
-// https://github.com/martinweber/learn-opengl-raytrace-weekend/blob/develop/src/shader/compute.glsl#L76
+/**
+* https://github.com/martinweber/learn-opengl-raytrace-weekend/blob/develop/src/shader/compute.glsl#L76
+* https://registry.khronos.org/OpenGL-Refpages/gl4/html/mod.xhtml
+* glsl: mod(x, y) <==> x - y * floor(x/y)
+* wgsl: x % y <==> x - y * trunc(x/y)
+*/
 fn rand(v: vec2f) -> f32 {
   var a = 12.9898;
   var b = 78.233;
   var c = 43758.5453;
   var dt = dot(v, vec2f(a, b));
-  var sn = dt % 3.14;
+  var sn = dt - 3.14 * floor(dt / 3.14);
   return fract(sin(sn) * c);
 }
 
