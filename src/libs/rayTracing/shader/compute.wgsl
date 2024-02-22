@@ -55,7 +55,7 @@ fn main(@builtin(global_invocation_id) _id: vec3u) {
     pixelColor += rayColor(ray);
   }
 
-  pixelColor = pixelColor / SamplesPerPixel;
+  pixelColor = sqrt(pixelColor / SamplesPerPixel);
   textureStore(imageTexture, vec2<i32>(_id.xy), vec4f(pixelColor, 1.0));
 }
 
