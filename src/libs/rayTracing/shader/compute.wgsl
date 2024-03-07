@@ -30,8 +30,6 @@ struct Sphere {
 @group(0) @binding(1) var<uniform> camera: Camera;
 @group(0) @binding(2) var<storage> world: array<Sphere, WorldLength>;
 
-var<private> randState: vec2f;
-
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) _id: vec3u) {
   let screenSize = textureDimensions(imageTexture);
@@ -39,8 +37,6 @@ fn main(@builtin(global_invocation_id) _id: vec3u) {
   if (_id.x >= u32(screenSize.x) || _id.y >= u32(screenSize.y)) {
     return;
   }
-
-  randState = vec2f(_id.xy / screenSize.xy);
 
   var pixelColor = vec3f(0.0, 0.0, 0.0);
   for (var i: f32 = 0.0; i < SamplesPerPixel; i += 1.0) {
@@ -99,6 +95,7 @@ fn rayColor(_ray: Ray) -> vec3f {
       /**
        * Lambertian distribution
        * https://en.wikipedia.org/wiki/Lambertian_reflectance
+       * 让反射光线向法线靠近
       */
       let direction = rec.normal + normalize(randomInUnitSphere(rec.p));
       ray.origin = rec.p;
