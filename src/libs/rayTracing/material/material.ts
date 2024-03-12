@@ -1,3 +1,8 @@
+export enum MaterialType {
+  Lambertian = 0,
+}
+
 export abstract class Material {
-  // TODO
+  public abstract type: MaterialType;
+  public abstract getMaterialData(): number[];
 }

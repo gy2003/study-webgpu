@@ -1,7 +1,18 @@
+import {MaterialType, Material} from './material';
+
 type Color = [number, number, number];
 
-export class Lambertian {
-  constructor(public albedo: Color) {}
-}
+export class Lambertian extends Material {
+  public type = MaterialType.Lambertian;
+  private albedo: Color;
 
-export type Material = Lambertian;
+  constructor(albedo: Color) {
+    super();
+
+    this.albedo = albedo;
+  }
+
+  public getMaterialData(): number[] {
+    return [...this.albedo, 0];
+  }
+}

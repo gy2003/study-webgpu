@@ -1,4 +1,5 @@
-import type {Sphere} from "./sphere";
+import type {Sphere} from './sphere';
+import {MaterialType} from './material';
 
 export class HittableList {
   objects: Sphere[] = [];
@@ -13,13 +14,23 @@ export class HittableList {
 
   getObjectsBuffer(device: GPUDevice) {
     const objectsArray: number[] = [];
-    this.objects.forEach(obj => {
-      objectsArray.push(...obj.center, obj.radius);
+    const materialsArray: number[][] = [];
+
+    this.objects.forEach((obj) => {
+      const material = obj.material;
+
+      if (materialsArray[material.type]) {
+        materialsArray[material.type].push(...material.getMaterialData());
+      } else {
+        materialsArray[material.type] = [...material.getMaterialData()]
+      }
+
+      objectsArray.push(...obj.center, obj.radius, material.type);
     });
     const objectsArrayView = new Float32Array(objectsArray);
 
     const objectBuffer = device.createBuffer({
-      label: "objectBuffer",
+      label: 'objectBuffer',
       size: objectsArrayView.byteLength,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
     });

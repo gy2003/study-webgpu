@@ -1,4 +1,4 @@
-import type {Material} from "./material/lambertian";
+import type {Material} from "./material";
 
 type Center = [number, number, number];
 
