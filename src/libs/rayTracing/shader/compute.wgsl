@@ -1,4 +1,3 @@
-const WorldLength = 2;
 const Infinity: f32 = 0x1p+127f; // https://www.w3.org/TR/WGSL/#f32
 const SamplesPerPixel = 60.0;
 const PI = 3.1415926535;
@@ -19,16 +18,36 @@ struct HitRecord {
   normal: vec3f,
   t: f32,
   frontFace: bool,
+  materialType: f32,
+  materialIndex: f32,
 }
 
 struct Sphere {
   center: vec3f,
   radius: f32,
+  materialType: f32,
+  materialIndex: f32,
+}
+
+struct Lambertian {
+  albedo: vec3f,
+}
+
+struct Metal {
+  albedo: vec3f,
+  fuzz: f32,
+}
+
+struct Dieletric {
+  ir: f32,
 }
 
 @group(0) @binding(0) var imageTexture: texture_storage_2d<rgba8unorm, write>;
 @group(0) @binding(1) var<uniform> camera: Camera;
-@group(0) @binding(2) var<storage> world: array<Sphere, WorldLength>;
+@group(0) @binding(2) var<storage> world: array<Sphere>;
+@group(0) @binding(3) var<storage, read> lambertian: array<Lambertian>;
+@group(0) @binding(4) var<storage, read> metal: array<Metal>;
+@group(0) @binding(5) var<storage, read> dieletric: array<Dieletric>;
 
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) _id: vec3u) {
@@ -79,7 +98,7 @@ fn rayAt(ray: Ray, t: f32) -> vec3f {
 fn rayColor(_ray: Ray) -> vec3f {
   var depth = 50;
   var ray = _ray;
-  var factor: f32 = 1.0;
+  var factor = vec3f(1.0, 1.0, 1.0);
   var resultColor: vec3f;
 
   loop {
@@ -97,12 +116,46 @@ fn rayColor(_ray: Ray) -> vec3f {
        * https://en.wikipedia.org/wiki/Lambertian_reflectance
        * 让反射光线向法线靠近
       */
-      let direction = rec.normal + normalize(randomInUnitSphere(rec.p));
-      ray.origin = rec.p;
-      ray.direction = direction;
-      factor = 0.5 * factor;
-      continue;
+      var scattered: Ray;
+      var attenuation: vec3f;
+
+      // Lambertian
+      if (rec.materialType == 0.f) {
+        if (lambertianScatter(ray, rec, &attenuation, &scattered, lambertian[i32(rec.materialIndex)])) {
+          ray = scattered;
+          factor = attenuation * factor;
+          continue;
+        }
+
+        resultColor = vec3f(0.0, 0.0, 0.0);
+        break; 
+      }
+
+      // Metal
+      if (rec.materialType == 1.f) {
+        if (metalScatter(ray, rec, &attenuation, &scattered, metal[i32(rec.materialIndex)])) {
+          ray = scattered;
+          factor = attenuation * factor;
+          continue;
+        }
+
+        resultColor = vec3f(0.0, 0.0, 0.0);
+        break;
+      }
+
+      // dieletric
+      if (rec.materialType == 2.f) {
+        if (dieletricScatter(ray, rec, &attenuation, &scattered, dieletric[i32(rec.materialIndex)])) {
+          ray = scattered;
+          factor = attenuation * factor;
+          continue;
+        }
+
+        resultColor = vec3f(0.0, 0.0, 0.0);
+        break;
+      }
     }
+
     let a = 0.5 * (ray.direction.y + 1.0);
     resultColor = (1.0 - a) * vec3f(1.0, 1.0, 1.0) + a * vec3f(0.5, 0.7, 1.0);
     break;
@@ -134,6 +187,8 @@ fn sphere_hit(r: Ray, ray_tmin: f32, ray_tmax: f32, rec: ptr<function, HitRecord
 
   (*rec).t = root;
   (*rec).p = rayAt(r, root);
+  (*rec).materialType = sphere.materialType;
+  (*rec).materialIndex = sphere.materialIndex;
   let outwardNormal = ((*rec).p - sphere.center) / sphere.radius;
   setFaceNormal(r, outwardNormal, rec);
 
@@ -144,8 +199,9 @@ fn hittableList(r: Ray, rayTmin: f32, rayTmax: f32, rec: ptr<function, HitRecord
   var tempRec: HitRecord;
   var hitAnything = false;
   var closestSoFar = rayTmax;
+  let len = arrayLength(&world);
 
-  for (var i: i32 = 0; i < WorldLength; i++) {
+  for (var i: u32 = 0u; i < len; i++) {
     var object = world[i];
     if (sphere_hit(r, rayTmin, closestSoFar, &tempRec, object)) {
       hitAnything = true;
@@ -155,6 +211,54 @@ fn hittableList(r: Ray, rayTmin: f32, rayTmax: f32, rec: ptr<function, HitRecord
   }
 
   return hitAnything;
+}
+
+fn lambertianScatter(ray: Ray, rec: HitRecord, attenuation: ptr<function, vec3f>, scattered: ptr<function, Ray>, material: Lambertian) -> bool {
+  var scatterDirection = rec.normal + normalize(randomInUnitSphere(rec.p));
+
+  if (near_zero(scatterDirection)) {
+    scatterDirection = rec.normal;
+  }
+
+  *scattered = genRay(rec.p, scatterDirection);
+  *attenuation = material.albedo;
+  return true;
+}
+
+fn metalScatter(ray: Ray, rec: HitRecord, attenuation: ptr<function, vec3f>, scattered: ptr<function, Ray>, material: Metal) -> bool {
+  let reflected = reflect(normalize(ray.direction), rec.normal);
+
+  *scattered = genRay(rec.p, reflected + material.fuzz * normalize(randomInUnitSphere(rec.p)));
+  *attenuation = material.albedo;
+  return dot((*scattered).direction, rec.normal) > 0.f;
+}
+
+fn reflectance(cosine: f32, refIdx: f32) -> f32 {
+  // Schlick's approximation
+  var r0 = (1.0f - refIdx) / (1.0f + refIdx);
+  r0 = r0 * r0;
+  return r0 + (1.0f - r0) * pow((1.0f - cosine), 5.0f);
+}
+
+fn dieletricScatter(ray: Ray, rec: HitRecord, attenuation: ptr<function, vec3f>, scattered: ptr<function, Ray>, material: Dieletric) -> bool {
+  (*attenuation) = vec3f(1.0, 1.0, 1.0);
+  let refractionRatio = select(material.ir, 1.0 / material.ir, rec.frontFace);
+
+  let unitDirection = normalize(ray.direction);
+  let cosTheta = min(dot(-unitDirection, rec.normal), 1.0f);
+  let sinTheta = sqrt(1.0f - cosTheta * cosTheta);
+
+  let cannotRefract = refractionRatio * sinTheta > 1.0f;
+  var direction: vec3f;
+
+  if (cannotRefract || reflectance(cosTheta, refractionRatio) > rand(rec.p.xy)) {
+    direction = reflect(unitDirection, rec.normal);
+  } else {
+    direction = refract(unitDirection, rec.normal, refractionRatio);
+  }
+
+  *scattered = genRay(rec.p, direction);
+  return true;
 }
 
 /**
@@ -197,4 +301,9 @@ fn randomOnHemisphere(pos: vec3f, normal: vec3f) -> vec3f {
   } else {
     return -onUnitSphere;
   }
+}
+
+fn near_zero(e: vec3f) -> bool {
+  let s = 1e-8f;
+  return abs(e[0]) < s && abs(e[1]) < s && abs(e[2]) < s;
 }

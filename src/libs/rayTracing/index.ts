@@ -3,7 +3,7 @@ import type {CanvasInfo} from '../../utils';
 import {Camera} from "./camera";
 import {Sphere} from "./sphere";
 import {HittableList} from "./hittable";
-import {Lambertian} from "./material";
+import {Lambertian, Metal, Dielectric} from "./material";
 import computeShader from "./shader/compute.wgsl?raw";
 import renderShader from "./shader/render.wgsl?raw";
 
@@ -109,12 +109,19 @@ class RayTracing {
   createComputeBindGroup() {
     const {device} = this.canvasInfo;
 
-    const materialGround = new Lambertian([0.8, 0.8, 0.0]);
-    const materialCenter = new Lambertian([0.7, 0.3, 0.3]);
+    const R = Math.cos(Math.PI / 4);
+
+    // const materialGround = new Lambertian([0.8, 0.8, 0.0]);
+    // const materialCenter = new Lambertian([0.1, 0.2, 0.5]);
+    const materialLeft = new Lambertian([0, 0, 1]);
+    const materialRight = new Lambertian([1, 0, 0]);
 
     const world = new HittableList();
-    world.add(new Sphere([0, 0, -1], 0.5, materialGround));
-    world.add(new Sphere([0,-100.5,-1], 100, materialCenter));
+    // world.add(new Sphere([0,-100.5,-1], 100, materialGround));
+    // world.add(new Sphere([0, 0, -1], 0.5, materialCenter));
+    // world.add(new Sphere([-1, 0, -1], 0.5, materialLeft));
+    world.add(new Sphere([-R, 0, -1], R, materialLeft));
+    world.add(new Sphere([R, 0, -1], R, materialRight));
 
     const worldBuffer = world.getObjectsBuffer(device);
 
@@ -138,6 +145,27 @@ class RayTracing {
           buffer: {
             type: "read-only-storage"
           },
+        },
+        {
+          binding: 3,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {
+            type: "read-only-storage"
+          },
+        },
+        {
+          binding: 4,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {
+            type: "read-only-storage"
+          },
+        },
+        {
+          binding: 5,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {
+            type: "read-only-storage"
+          },
         }
       ],
     });
@@ -147,7 +175,10 @@ class RayTracing {
       entries: [
         {binding: 0, resource: this.imageTexture.createView()},
         {binding: 1, resource: {buffer: this.cameraBuffer}},
-        {binding: 2, resource: {buffer: worldBuffer}},
+        {binding: 2, resource: {buffer: worldBuffer.objectBuffer}},
+        {binding: 3, resource: {buffer: worldBuffer.materialsBuffer[0]}},
+        {binding: 4, resource: {buffer: worldBuffer.materialsBuffer[1]}},
+        {binding: 5, resource: {buffer: worldBuffer.materialsBuffer[2]}},
       ],
     });
   }

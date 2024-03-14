@@ -1,5 +1,7 @@
 export enum MaterialType {
   Lambertian = 0,
+  Metal,
+  Dielectric,
 }
 
 export abstract class Material {
