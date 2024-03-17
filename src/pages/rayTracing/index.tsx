@@ -12,7 +12,7 @@ function RayTracing() {
 
     main(canvasRef.current);
   }, []);
-  return <canvas ref={canvasRef} className="ray-tracing" width={1024} height={576}></canvas>;
+  return <canvas ref={canvasRef} className="ray-tracing" width={1200} height={675}></canvas>;
 }
 
 export default RayTracing;

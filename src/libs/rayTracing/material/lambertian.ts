@@ -1,12 +1,11 @@
+import type {Vec3} from 'wgpu-matrix';
+
 import {MaterialType, Material} from './material';
-
-type Color = [number, number, number];
-
 export class Lambertian extends Material {
   public type = MaterialType.Lambertian;
-  private albedo: Color;
+  private albedo: Vec3;
 
-  constructor(albedo: Color) {
+  constructor(albedo: Vec3) {
     super();
 
     this.albedo = albedo;

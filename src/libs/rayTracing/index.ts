@@ -1,11 +1,12 @@
 import {getCanvasInfo} from '../../utils';
 import type {CanvasInfo} from '../../utils';
-import {Camera} from "./camera";
-import {Sphere} from "./sphere";
-import {HittableList} from "./hittable";
-import {Lambertian, Metal, Dielectric} from "./material";
-import computeShader from "./shader/compute.wgsl?raw";
-import renderShader from "./shader/render.wgsl?raw";
+import {Camera} from './camera';
+import {Sphere} from './sphere';
+import {HittableList} from './hittable';
+import {Lambertian, Metal, Dielectric} from './material';
+import {generateWorld} from './generateWorld';
+import computeShader from './shader/compute.wgsl?raw';
+import renderShader from './shader/render.wgsl?raw';
 
 const WORKGROUP_SIZE = 8;
 
@@ -51,16 +52,11 @@ class RayTracing {
   createVertexBuffer() {
     const device = this.canvasInfo.device;
     const vertices = new Float32Array([
-      -1.0, -1.0,
-       1.0, -1.0,
-       1.0,  1.0,
-      -1.0, -1.0,
-       1.0,  1.0,
-      -1.0,  1.0,
+      -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0,
     ]);
 
     this.vertexBuffer = device.createBuffer({
-      label: "vertexBuffer",
+      label: 'vertexBuffer',
       size: vertices.byteLength,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
     });
@@ -68,60 +64,77 @@ class RayTracing {
 
     this.vertexBufferLayout = {
       arrayStride: 8,
-      attributes: [
-        {shaderLocation: 0, offset: 0, format: "float32x2"},
-      ],
-    }
+      attributes: [{shaderLocation: 0, offset: 0, format: 'float32x2'}],
+    };
   }
 
   createBuffer() {
     const {device, canvas} = this.canvasInfo;
-    const camera = new Camera();
+    const camera = new Camera(
+      [13, 2, 3],
+      [0, 0, 0],
+      [0, 1, 0],
+      20,
+      canvas.width,
+      canvas.height,
+      0.6,
+      10
+    );
 
-    const aspectRatio = canvas.width / canvas.height;
-    const cameraArray = new Float32Array([...camera.pos, camera.scale, aspectRatio]);
+    const cameraArray = new Float32Array([
+      ...camera.cameraCenter,
+      0,
+      ...camera.pixel00Loc,
+      0,
+      ...camera.pixelDeltaU,
+      0,
+      ...camera.pixelDeltaV,
+      camera.defocusAngle,
+      ...camera.defocusDiskU,
+      0,
+      ...camera.defocusDiskV,
+    ]);
 
     this.cameraBuffer = device.createBuffer({
-      label: "cameraBuffer",
-      size: 32, // https://webgpufundamentals.org/webgpu/lessons/webgpu-memory-layout.html
+      label: 'cameraBuffer',
+      size: 96, // https://webgpufundamentals.org/webgpu/lessons/webgpu-memory-layout.html
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
     });
     device.queue.writeBuffer(this.cameraBuffer, 0, cameraArray, 0);
 
     this.imageTexture = device.createTexture({
-      label: "imageTexture",
+      label: 'imageTexture',
       size: {
         width: canvas.width,
         height: canvas.height,
       },
-      format: "rgba8unorm",
+      format: 'rgba8unorm',
       usage:
         GPUTextureUsage.STORAGE_BINDING |
         GPUTextureUsage.RENDER_ATTACHMENT |
-        GPUTextureUsage.TEXTURE_BINDING
+        GPUTextureUsage.TEXTURE_BINDING,
     });
     this.sampler = device.createSampler({
-      minFilter: "linear",
-      magFilter: "linear",
+      minFilter: 'linear',
+      magFilter: 'linear',
     });
   }
 
   createComputeBindGroup() {
     const {device} = this.canvasInfo;
 
-    const R = Math.cos(Math.PI / 4);
-
     // const materialGround = new Lambertian([0.8, 0.8, 0.0]);
     // const materialCenter = new Lambertian([0.1, 0.2, 0.5]);
-    const materialLeft = new Lambertian([0, 0, 1]);
-    const materialRight = new Lambertian([1, 0, 0]);
+    // const materialLeft = new Dielectric(1.5);
+    // const materialRight = new Metal([0.8, 0.6, 0.2], 0.0);
 
     const world = new HittableList();
-    // world.add(new Sphere([0,-100.5,-1], 100, materialGround));
+    generateWorld(world);
+    // world.add(new Sphere([0, -100.5, -1], 100, materialGround));
     // world.add(new Sphere([0, 0, -1], 0.5, materialCenter));
     // world.add(new Sphere([-1, 0, -1], 0.5, materialLeft));
-    world.add(new Sphere([-R, 0, -1], R, materialLeft));
-    world.add(new Sphere([R, 0, -1], R, materialRight));
+    // world.add(new Sphere([-1, 0, -1], -0.4, materialLeft));
+    // world.add(new Sphere([1, 0, -1], 0.5, materialRight));
 
     const worldBuffer = world.getObjectsBuffer(device);
 
@@ -143,34 +156,35 @@ class RayTracing {
           binding: 2,
           visibility: GPUShaderStage.COMPUTE,
           buffer: {
-            type: "read-only-storage"
+            type: 'read-only-storage',
           },
         },
         {
           binding: 3,
           visibility: GPUShaderStage.COMPUTE,
           buffer: {
-            type: "read-only-storage"
+            type: 'read-only-storage',
           },
         },
         {
           binding: 4,
           visibility: GPUShaderStage.COMPUTE,
           buffer: {
-            type: "read-only-storage"
+            type: 'read-only-storage',
           },
         },
         {
           binding: 5,
           visibility: GPUShaderStage.COMPUTE,
           buffer: {
-            type: "read-only-storage"
+            type: 'read-only-storage',
           },
-        }
+        },
       ],
     });
+
     this.computeBindGroup = device.createBindGroup({
-      label: "bindGroup",
+      label: 'bindGroup',
       layout: this.computeBindGroupLayout,
       entries: [
         {binding: 0, resource: this.imageTexture.createView()},
@@ -197,11 +211,11 @@ class RayTracing {
           binding: 1,
           visibility: GPUShaderStage.FRAGMENT,
           sampler: {},
-        }
+        },
       ],
     });
     this.renderBindGroup = device.createBindGroup({
-      label: "bindGroup",
+      label: 'bindGroup',
       layout: this.renderBindGroupLayout,
       entries: [
         {binding: 0, resource: this.imageTexture.createView()},
@@ -217,12 +231,12 @@ class RayTracing {
       bindGroupLayouts: [this.computeBindGroupLayout],
     });
     this.computePipeline = device.createComputePipeline({
-      label: "computePipeline",
+      label: 'computePipeline',
       layout: pipelineLayout,
       compute: {
         module: device.createShaderModule({code: computeShader}),
-        entryPoint: "main",
-      }
+        entryPoint: 'main',
+      },
     });
   }
 
@@ -235,25 +249,25 @@ class RayTracing {
       bindGroupLayouts: [this.renderBindGroupLayout],
     });
     this.renderPipeline = device.createRenderPipeline({
-      label: "renderPipeline",
+      label: 'renderPipeline',
       layout: pipelineLayout,
       vertex: {
         module: renderModule,
-        entryPoint: "vertexMain",
-        buffers: [this.vertexBufferLayout]
+        entryPoint: 'vertexMain',
+        buffers: [this.vertexBufferLayout],
       },
       fragment: {
         module: renderModule,
-        entryPoint: "fragmentMain",
+        entryPoint: 'fragmentMain',
         targets: [{format}],
       },
       multisample: {
         count: 4,
-      }
+      },
     });
 
     this.textureForMultisampling = device.createTexture({
-      label: "textureForMultisampling",
+      label: 'textureForMultisampling',
       size: {
         width: canvas.width,
         height: canvas.height,
@@ -266,7 +280,7 @@ class RayTracing {
   }
 
   render() {
-    console.time("renderTime");
+    console.time('renderTime');
 
     const {device, context, canvas} = this.canvasInfo;
     const enconder = device.createCommandEncoder();
@@ -281,13 +295,15 @@ class RayTracing {
     computePass.end();
 
     const renderPass = enconder.beginRenderPass({
-      colorAttachments: [{
-        view: this.textureForMultisamplingView,
-        resolveTarget: context.getCurrentTexture().createView(),
-        clearValue: [0, 0, 0, 1],
-        loadOp: "clear",
-        storeOp: "store",
-      }]
+      colorAttachments: [
+        {
+          view: this.textureForMultisamplingView,
+          resolveTarget: context.getCurrentTexture().createView(),
+          clearValue: [0, 0, 0, 1],
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
     });
     renderPass.setPipeline(this.renderPipeline);
     renderPass.setVertexBuffer(0, this.vertexBuffer);
@@ -297,12 +313,12 @@ class RayTracing {
 
     device.queue.submit([enconder.finish()]);
 
-    console.timeEnd("renderTime");
+    console.timeEnd('renderTime');
   }
 }
 
 export async function main(canvas: HTMLCanvasElement) {
   new RayTracing().initialize(canvas).then((self) => {
     self.render();
-  })
+  });
 }

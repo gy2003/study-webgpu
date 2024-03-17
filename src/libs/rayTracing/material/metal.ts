@@ -1,13 +1,13 @@
-import {MaterialType, Material} from './material';
+import type {Vec3} from 'wgpu-matrix';
 
-type Color = [number, number, number];
+import {MaterialType, Material} from './material';
 
 export class Metal extends Material {
   public type = MaterialType.Metal;
-  private albedo: Color;
+  private albedo: Vec3;
   private fuzz: number;
 
-  constructor(albedo: Color, fuzz: number) {
+  constructor(albedo: Vec3, fuzz: number) {
     super();
 
     this.albedo = albedo;

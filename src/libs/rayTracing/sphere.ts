@@ -1,12 +1,11 @@
+import type {Vec3} from 'wgpu-matrix';
+
 import type {Material} from "./material";
-
-type Center = [number, number, number];
-
 export class Sphere {
-  center: Center;
+  center: Vec3;
   radius: number;
   material: Material;
-  constructor(center: Center, radius: number, material: Material) {
+  constructor(center: Vec3, radius: number, material: Material) {
     this.center = center;
     this.radius = radius;
     this.material = material;

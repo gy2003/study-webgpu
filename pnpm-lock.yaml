@@ -17,6 +17,9 @@ dependencies:
   react-router-dom:
     specifier: ^6.22.0
     version: 6.22.0(react-dom@18.2.0)(react@18.2.0)
+  wgpu-matrix:
+    specifier: ^2.5.1
+    version: 2.5.1
 
 devDependencies:
   '@types/react':
@@ -1933,6 +1936,10 @@ packages:
     optionalDependencies:
       fsevents: 2.3.3
     dev: true
+
+  /wgpu-matrix@2.5.1:
+    resolution: {integrity: sha512-fEKK2Hm3JW0KEko2CdrKEg4d81KBKU8UXGhX0kb//3s0A1MrXFG37jzCbvuRdx0XtBs0923oFvSjevwNI5G4Eg==}
+    dev: false
 
   /which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}

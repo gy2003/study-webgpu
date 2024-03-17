@@ -1,11 +1,15 @@
 const Infinity: f32 = 0x1p+127f; // https://www.w3.org/TR/WGSL/#f32
-const SamplesPerPixel = 60.0;
+const SamplesPerPixel = 400.f;
 const PI = 3.1415926535;
 
 struct Camera {
-  cameraPos: vec3f,
-  scale: f32,
-  aspectRaio: f32,
+  cameraCenter: vec3f,
+  pixel00Loc: vec3f,
+  pixelDeltaU: vec3f,
+  pixelDeltaV: vec3f,
+  defocusAngle: f32,
+  defocusDiskU: vec3f,
+  defocusDiskV: vec3f,
 }
 
 struct Ray {
@@ -63,10 +67,11 @@ fn main(@builtin(global_invocation_id) _id: vec3u) {
     var ry = rand(vec2f(f32(_id.y) + i, f32(_id.x) + i));
     var id = vec2f(f32(_id.x) + rx, f32(_id.y) + ry);
 
-    let x = (2.0 * (id.x + 0.5) / f32(screenSize.x) - 1.0) * camera.aspectRaio * camera.scale;
-    let y = (1.0 - 2.0 * (id.y + 0.5) / f32(screenSize.y)) * camera.scale;
-    let rayDir = normalize(vec3f(x, y, -1.0));
-    let ray = genRay(camera.cameraPos, rayDir);
+    let pixelCenter = camera.pixel00Loc + (id.x * camera.pixelDeltaU) + (id.y * camera.pixelDeltaV);
+
+    let rayOrign = select(defocusDiskSample(pixelCenter, camera.cameraCenter), camera.cameraCenter, camera.defocusAngle <= 0.0f);
+    let rayDir = normalize(pixelCenter - rayOrign);
+    let ray = genRay(rayOrign, rayDir);
     pixelColor += rayColor(ray);
   }
 
@@ -292,6 +297,11 @@ fn randomInUnitSphere(pos: vec3f) -> vec3f {
   }
 
   return p;
+}
+
+fn defocusDiskSample(pos: vec3f, cameraCenter: vec3f) -> vec3f {
+  let p = randomInUnitSphere(pos);
+  return cameraCenter + (p.x * camera.defocusDiskU) + (p.y * camera.defocusDiskV);
 }
 
 fn randomOnHemisphere(pos: vec3f, normal: vec3f) -> vec3f {
