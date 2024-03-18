@@ -1,5 +1,5 @@
 const Infinity: f32 = 0x1p+127f; // https://www.w3.org/TR/WGSL/#f32
-const SamplesPerPixel = 400.f;
+const SamplesPerPixel = 50.f;
 const PI = 3.1415926535;
 
 struct Camera {
@@ -15,6 +15,7 @@ struct Camera {
 struct Ray {
   origin: vec3f,
   direction: vec3f,
+  time: f32,
 }
 
 struct HitRecord {
@@ -29,8 +30,10 @@ struct HitRecord {
 struct Sphere {
   center: vec3f,
   radius: f32,
+  centerVec: vec3f,
   materialType: f32,
   materialIndex: f32,
+  isMoving: f32,
 }
 
 struct Lambertian {
@@ -71,7 +74,8 @@ fn main(@builtin(global_invocation_id) _id: vec3u) {
 
     let rayOrign = select(defocusDiskSample(pixelCenter, camera.cameraCenter), camera.cameraCenter, camera.defocusAngle <= 0.0f);
     let rayDir = normalize(pixelCenter - rayOrign);
-    let ray = genRay(rayOrign, rayDir);
+    let rayTime = rand(pixelCenter.xy);
+    let ray = genRay(rayOrign, rayDir, rayTime);
     pixelColor += rayColor(ray);
   }
 
@@ -79,10 +83,11 @@ fn main(@builtin(global_invocation_id) _id: vec3u) {
   textureStore(imageTexture, vec2<i32>(_id.xy), vec4f(pixelColor, 1.0));
 }
 
-fn genRay(origin: vec3f, direction: vec3f) -> Ray {
+fn genRay(origin: vec3f, direction: vec3f, time: f32) -> Ray {
   var ray: Ray;
   ray.origin = origin;
   ray.direction = direction;
+  ray.time = time;
   return ray;
 }
 
@@ -115,7 +120,6 @@ fn rayColor(_ray: Ray) -> vec3f {
 
     var rec: HitRecord;
     if (hittableList(ray, 0.001, Infinity, &rec)) {
-      // let direction = randomOnHemisphere(rec.p, rec.normal);
       /**
        * Lambertian distribution
        * https://en.wikipedia.org/wiki/Lambertian_reflectance
@@ -171,7 +175,8 @@ fn rayColor(_ray: Ray) -> vec3f {
 }
 
 fn sphere_hit(r: Ray, ray_tmin: f32, ray_tmax: f32, rec: ptr<function, HitRecord>, sphere: Sphere) -> bool {
-  let oc = r.origin - sphere.center;
+  let center = select(sphere.center, sphere.center + r.time * sphere.centerVec, sphere.isMoving == 1.0f);
+  let oc = r.origin - center;
   let a = dot(r.direction, r.direction);
   let half_b = dot(oc, r.direction);
   let c = dot(oc, oc) - sphere.radius * sphere.radius;
@@ -225,7 +230,7 @@ fn lambertianScatter(ray: Ray, rec: HitRecord, attenuation: ptr<function, vec3f>
     scatterDirection = rec.normal;
   }
 
-  *scattered = genRay(rec.p, scatterDirection);
+  *scattered = genRay(rec.p, scatterDirection, ray.time);
   *attenuation = material.albedo;
   return true;
 }
@@ -233,7 +238,7 @@ fn lambertianScatter(ray: Ray, rec: HitRecord, attenuation: ptr<function, vec3f>
 fn metalScatter(ray: Ray, rec: HitRecord, attenuation: ptr<function, vec3f>, scattered: ptr<function, Ray>, material: Metal) -> bool {
   let reflected = reflect(normalize(ray.direction), rec.normal);
 
-  *scattered = genRay(rec.p, reflected + material.fuzz * normalize(randomInUnitSphere(rec.p)));
+  *scattered = genRay(rec.p, reflected + material.fuzz * normalize(randomInUnitSphere(rec.p)), ray.time);
   *attenuation = material.albedo;
   return dot((*scattered).direction, rec.normal) > 0.f;
 }
@@ -262,7 +267,7 @@ fn dieletricScatter(ray: Ray, rec: HitRecord, attenuation: ptr<function, vec3f>,
     direction = refract(unitDirection, rec.normal, refractionRatio);
   }
 
-  *scattered = genRay(rec.p, direction);
+  *scattered = genRay(rec.p, direction, ray.time);
   return true;
 }
 

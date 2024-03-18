@@ -1,9 +1,7 @@
 import {getCanvasInfo} from '../../utils';
 import type {CanvasInfo} from '../../utils';
 import {Camera} from './camera';
-import {Sphere} from './sphere';
 import {HittableList} from './hittable';
-import {Lambertian, Metal, Dielectric} from './material';
 import {generateWorld} from './generateWorld';
 import computeShader from './shader/compute.wgsl?raw';
 import renderShader from './shader/render.wgsl?raw';
@@ -123,18 +121,8 @@ class RayTracing {
   createComputeBindGroup() {
     const {device} = this.canvasInfo;
 
-    // const materialGround = new Lambertian([0.8, 0.8, 0.0]);
-    // const materialCenter = new Lambertian([0.1, 0.2, 0.5]);
-    // const materialLeft = new Dielectric(1.5);
-    // const materialRight = new Metal([0.8, 0.6, 0.2], 0.0);
-
     const world = new HittableList();
     generateWorld(world);
-    // world.add(new Sphere([0, -100.5, -1], 100, materialGround));
-    // world.add(new Sphere([0, 0, -1], 0.5, materialCenter));
-    // world.add(new Sphere([-1, 0, -1], 0.5, materialLeft));
-    // world.add(new Sphere([-1, 0, -1], -0.4, materialLeft));
-    // world.add(new Sphere([1, 0, -1], 0.5, materialRight));
 
     const worldBuffer = world.getObjectsBuffer(device);
 

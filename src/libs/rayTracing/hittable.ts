@@ -28,7 +28,16 @@ export class HittableList {
 
       const index = materialsArray[material.type].length / materialData.length - 1;
 
-      objectsArray.push(...obj.center, obj.radius, material.type, index, 0, 0);
+      objectsArray.push(
+        ...obj.center0,
+        obj.radius,
+        ...obj.centerVec,
+        material.type,
+        index,
+        obj.isMoving,
+        0,
+        0,
+      );
     });
     const objectsArrayView = new Float32Array(objectsArray);
     const materialsBuffer: GPUBuffer[] = [];
