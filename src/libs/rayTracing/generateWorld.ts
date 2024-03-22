@@ -21,8 +21,8 @@ export function generateWorld(world: HittableList) {
           // diffuse
           const albedo = vec3.mul(randomVec3(), randomVec3());
           sphereMaterial = new Lambertian(albedo);
-          const centerVec = [0, random(0, 0.5), 0];
-          world.add(new Sphere(center, 0.2, sphereMaterial, centerVec));
+          const center2 = vec3.add(center, [0, random(0, 0.5), 0]);
+          world.add(new Sphere(center, 0.2, sphereMaterial, center2));
         } else if (chooseMat < 0.95) {
           // metal
           const albedo = randomVec3(0.5, 1);

@@ -32,8 +32,13 @@ struct Sphere {
   radius: f32,
   centerVec: vec3f,
   materialType: f32,
+  pMin: vec3f,
+  left: f32,
+  pMax: vec3f,
+  right: f32,
   materialIndex: f32,
   isMoving: f32,
+  hasObject: f32,
 }
 
 struct Lambertian {

@@ -300,8 +300,10 @@ class RayTracing {
     renderPass.end();
 
     device.queue.submit([enconder.finish()]);
+    device.queue.onSubmittedWorkDone().then(() => {
+      console.timeEnd('renderTime');
+    });
 
-    console.timeEnd('renderTime');
   }
 }
 

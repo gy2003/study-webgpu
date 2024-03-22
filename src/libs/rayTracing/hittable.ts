@@ -1,5 +1,6 @@
 import type {Sphere} from './sphere';
 import {MaterialType} from './material';
+import {BVH} from './bvh';
 
 export class HittableList {
   objects: Sphere[] = [];
@@ -13,32 +14,64 @@ export class HittableList {
   }
 
   getObjectsBuffer(device: GPUDevice) {
+    const bvh = new BVH(this.objects);
     const objectsArray: number[] = [];
     const materialsArray: number[][] = [];
 
-    this.objects.forEach((obj) => {
-      const material = obj.material;
-      const materialData = material.getMaterialData();
+    bvh.bfs((node) => {
+      const obj = node.object;
 
-      if (materialsArray[material.type]) {
-        materialsArray[material.type].push(...materialData);
+      if (obj) {
+        const material = obj.material;
+        const materialData = material.getMaterialData();
+
+        if (materialsArray[material.type]) {
+          materialsArray[material.type].push(...materialData);
+        } else {
+          materialsArray[material.type] = [...materialData];
+        }
+
+        const index = materialsArray[material.type].length / materialData.length - 1;
+        const i = objectsArray.length;
+
+        objectsArray.push(
+          ...obj.center0,
+          obj.radius,
+          ...obj.centerVec,
+          material.type,
+          ...node.bounds.pMin,
+          leftNode(i, bvh.count),
+          ...node.bounds.pMax,
+          rightNode(i, bvh.count),
+          index,
+          obj.isMoving,
+          1, // have object
+          0,
+        );
       } else {
-        materialsArray[material.type] = [...materialData];
+        const i = objectsArray.length;
+
+        objectsArray.push(
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          ...node.bounds.pMin,
+          leftNode(i, bvh.count),
+          ...node.bounds.pMax,
+          rightNode(i, bvh.count),
+          0,
+          0,
+          0,
+          0,
+        );
       }
-
-      const index = materialsArray[material.type].length / materialData.length - 1;
-
-      objectsArray.push(
-        ...obj.center0,
-        obj.radius,
-        ...obj.centerVec,
-        material.type,
-        index,
-        obj.isMoving,
-        0,
-        0,
-      );
     });
+
     const objectsArrayView = new Float32Array(objectsArray);
     const materialsBuffer: GPUBuffer[] = [];
 
@@ -67,4 +100,22 @@ export class HittableList {
 
     return {objectBuffer, materialsBuffer};
   }
+}
+
+function leftNode(i: number, boundary?: number) {
+  if (typeof boundary === 'number') {
+    const j = 2 * i + 1;
+    return j >= boundary ? -1 : j;
+  }
+
+  return 2 * i + 1;
+}
+
+function rightNode(i: number, boundary?: number) {
+  if (typeof boundary === 'number') {
+    const j = 2 * i + 2;
+    return j >= boundary ? -1 : j;
+  }
+
+  return 2 * i + 2;
 }
