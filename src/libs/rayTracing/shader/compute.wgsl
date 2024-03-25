@@ -54,6 +54,11 @@ struct Dieletric {
   ir: f32,
 }
 
+struct Interval {
+  min: f32,
+  max: f32,
+}
+
 @group(0) @binding(0) var imageTexture: texture_storage_2d<rgba8unorm, write>;
 @group(0) @binding(1) var<uniform> camera: Camera;
 @group(0) @binding(2) var<storage> world: array<Sphere>;
@@ -124,7 +129,7 @@ fn rayColor(_ray: Ray) -> vec3f {
     depth--;
 
     var rec: HitRecord;
-    if (hittableList(ray, 0.001, Infinity, &rec)) {
+    if (hittableList(ray, genInterval(0.001, Infinity), &rec)) {
       /**
        * Lambertian distribution
        * https://en.wikipedia.org/wiki/Lambertian_reflectance
@@ -179,7 +184,7 @@ fn rayColor(_ray: Ray) -> vec3f {
   return resultColor;
 }
 
-fn sphere_hit(r: Ray, ray_tmin: f32, ray_tmax: f32, rec: ptr<function, HitRecord>, sphere: Sphere) -> bool {
+fn sphere_hit(r: Ray, ray_t: Interval, rec: ptr<function, HitRecord>, sphere: Sphere) -> bool {
   let center = select(sphere.center, sphere.center + r.time * sphere.centerVec, sphere.isMoving == 1.0f);
   let oc = r.origin - center;
   let a = dot(r.direction, r.direction);
@@ -193,9 +198,9 @@ fn sphere_hit(r: Ray, ray_tmin: f32, ray_tmax: f32, rec: ptr<function, HitRecord
   let sqrtd = sqrt(discriminant);
 
   var root = (-half_b - sqrtd) / a;
-  if (root <= ray_tmin || root >= ray_tmax) {
+  if (!intervalSurrounds(ray_t, root)) {
     root = (-half_b + sqrtd) / a;
-    if (root <= ray_tmin || root >= ray_tmax) {
+    if (!intervalSurrounds(ray_t, root)) {
       return false;
     }
   }
@@ -210,15 +215,19 @@ fn sphere_hit(r: Ray, ray_tmin: f32, ray_tmax: f32, rec: ptr<function, HitRecord
   return true;
 }
 
-fn hittableList(r: Ray, rayTmin: f32, rayTmax: f32, rec: ptr<function, HitRecord>) -> bool {
+// fn aabbHit() -> bool {
+
+// }
+
+fn hittableList(r: Ray, ray_t: Interval, rec: ptr<function, HitRecord>) -> bool {
   var tempRec: HitRecord;
   var hitAnything = false;
-  var closestSoFar = rayTmax;
+  var closestSoFar = ray_t.max;
   let len = arrayLength(&world);
 
   for (var i: u32 = 0u; i < len; i++) {
     var object = world[i];
-    if (sphere_hit(r, rayTmin, closestSoFar, &tempRec, object)) {
+    if (sphere_hit(r, genInterval(ray_t.min, closestSoFar), &tempRec, object)) {
       hitAnything = true;
       closestSoFar = tempRec.t;
       *rec = tempRec;
@@ -274,6 +283,21 @@ fn dieletricScatter(ray: Ray, rec: HitRecord, attenuation: ptr<function, vec3f>,
 
   *scattered = genRay(rec.p, direction, ray.time);
   return true;
+}
+
+fn genInterval(min: f32, max: f32) -> Interval {
+  var interval: Interval;
+  interval.min = min;
+  interval.max = max;
+  return interval;
+}
+
+fn intervalContains(interval: Interval, x: f32) -> bool {
+  return interval.min <= x && x <= interval.max;
+}
+
+fn intervalSurrounds(interval: Interval, x: f32) -> bool {
+  return interval.min < x && x < interval.max;
 }
 
 /**
