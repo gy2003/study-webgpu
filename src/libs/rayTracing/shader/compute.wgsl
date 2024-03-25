@@ -215,9 +215,40 @@ fn sphere_hit(r: Ray, ray_t: Interval, rec: ptr<function, HitRecord>, sphere: Sp
   return true;
 }
 
-// fn aabbHit() -> bool {
+// 判断是否与bounds相交
+fn aabbHit(r: Ray, ray_t: ptr<function, Interval>, sphere: Sphere) -> bool {
+  let invDir = 1.f / r.direction;
+  var pIn = (sphere.pMin - r.origin) * invDir;
+  var pOut = (sphere.pMax - r.origin) * invDir;
 
-// }
+  if (invDir[0] < 0.f) {
+    swap(&pIn.x, &pOut.x);
+  }
+
+  if (invDir[1] < 0.f) {
+    swap(&pIn.y, &pOut.y);
+  }
+
+  if (invDir[2] < 0.f) {
+    swap(&pIn.z, &pOut.z);
+  }
+
+  for (var i = 0; i < 3; i++) {
+    if ((*ray_t).min < pIn[i]) {
+      (*ray_t).min = pIn[i];
+    }
+
+    if ((*ray_t).max > pOut[i]) {
+      (*ray_t).max = pOut[i];
+    }
+
+    if ((*ray_t).min > (*ray_t).max) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 fn hittableList(r: Ray, ray_t: Interval, rec: ptr<function, HitRecord>) -> bool {
   var tempRec: HitRecord;
@@ -298,6 +329,12 @@ fn intervalContains(interval: Interval, x: f32) -> bool {
 
 fn intervalSurrounds(interval: Interval, x: f32) -> bool {
   return interval.min < x && x < interval.max;
+}
+
+fn swap(a: ptr<function, f32>, b: ptr<function, f32>) {
+  let c = *a;
+  (*a) = *b;
+  (*b) = c;
 }
 
 /**
