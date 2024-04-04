@@ -18,8 +18,8 @@ export class HittableList {
     const objectsArray: number[] = [];
     const materialsArray: number[][] = [];
 
-    bvh.bfs((node) => {
-      const obj = node.object;
+    bvh.nodes.forEach((node) => {
+      const obj = node.sphere;
 
       if (obj) {
         const material = obj.material;
@@ -32,7 +32,6 @@ export class HittableList {
         }
 
         const index = materialsArray[material.type].length / materialData.length - 1;
-        const i = objectsArray.length;
 
         objectsArray.push(
           ...obj.center0,
@@ -40,17 +39,15 @@ export class HittableList {
           ...obj.centerVec,
           material.type,
           ...node.bounds.pMin,
-          leftNode(i, bvh.count),
+          node.leftIndex,
           ...node.bounds.pMax,
-          rightNode(i, bvh.count),
+          node.rightIndex,
+          node.parentIndex,
           index,
           obj.isMoving,
-          1, // have object
-          0,
+          1, // is leaf
         );
       } else {
-        const i = objectsArray.length;
-
         objectsArray.push(
           0,
           0,
@@ -61,10 +58,10 @@ export class HittableList {
           0,
           0,
           ...node.bounds.pMin,
-          leftNode(i, bvh.count),
+          node.leftIndex,
           ...node.bounds.pMax,
-          rightNode(i, bvh.count),
-          0,
+          node.rightIndex,
+          node.parentIndex,
           0,
           0,
           0,
@@ -102,20 +99,3 @@ export class HittableList {
   }
 }
 
-function leftNode(i: number, boundary?: number) {
-  if (typeof boundary === 'number') {
-    const j = 2 * i + 1;
-    return j >= boundary ? -1 : j;
-  }
-
-  return 2 * i + 1;
-}
-
-function rightNode(i: number, boundary?: number) {
-  if (typeof boundary === 'number') {
-    const j = 2 * i + 2;
-    return j >= boundary ? -1 : j;
-  }
-
-  return 2 * i + 2;
-}

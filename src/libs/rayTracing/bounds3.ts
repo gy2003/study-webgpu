@@ -32,8 +32,12 @@ export class Bounds {
     return vec3.mulScalar(vec3.add(this.pMin, this.pMax), 0.5);
   }
 
+  extent() {
+    return vec3.subtract(this.pMax, this.pMin);
+  }
+
   maxExtent(): MaxExtent {
-    const diagonal = vec3.subtract(this.pMax, this.pMin);
+    const diagonal = this.extent();
 
     if (diagonal[0] > diagonal[1] && diagonal[0] > diagonal[2]) return 0;
     if (diagonal[1] > diagonal[2]) return 1;

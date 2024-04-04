@@ -1,5 +1,5 @@
 const Infinity: f32 = 0x1p+127f; // https://www.w3.org/TR/WGSL/#f32
-const SamplesPerPixel = 50.f;
+const SamplesPerPixel = 60.f;
 const PI = 3.1415926535;
 
 struct Camera {
@@ -33,12 +33,13 @@ struct Sphere {
   centerVec: vec3f,
   materialType: f32,
   pMin: vec3f,
-  left: f32,
+  leftIndex: f32,
   pMax: vec3f,
-  right: f32,
+  rightIndex: f32,
+  parentIndex: f32,
   materialIndex: f32,
   isMoving: f32,
-  hasObject: f32,
+  isObject: f32,
 }
 
 struct Lambertian {
@@ -129,7 +130,8 @@ fn rayColor(_ray: Ray) -> vec3f {
     depth--;
 
     var rec: HitRecord;
-    if (hittableList(ray, genInterval(0.001, Infinity), &rec)) {
+    var interval = genInterval(0.001, Infinity);
+    if (hittableList(ray, &interval, &rec)) {
       /**
        * Lambertian distribution
        * https://en.wikipedia.org/wiki/Lambertian_reflectance
@@ -216,52 +218,56 @@ fn sphere_hit(r: Ray, ray_t: Interval, rec: ptr<function, HitRecord>, sphere: Sp
 }
 
 // 判断是否与bounds相交
-fn aabbHit(r: Ray, ray_t: ptr<function, Interval>, sphere: Sphere) -> bool {
+fn aabbHit(r: Ray, ray_t: Interval, sphere: Sphere) -> bool {
+  var tempRec = ray_t;
   let invDir = 1.f / r.direction;
   var pIn = (sphere.pMin - r.origin) * invDir;
   var pOut = (sphere.pMax - r.origin) * invDir;
 
-  if (invDir[0] < 0.f) {
-    swap(&pIn.x, &pOut.x);
+  if (invDir.x < 0.f) {
+    swap(&pIn, &pOut, 0);
   }
 
-  if (invDir[1] < 0.f) {
-    swap(&pIn.y, &pOut.y);
+  if (invDir.y < 0.f) {
+    swap(&pIn, &pOut, 1);
   }
 
-  if (invDir[2] < 0.f) {
-    swap(&pIn.z, &pOut.z);
+  if (invDir.z < 0.f) {
+    swap(&pIn, &pOut, 2);
   }
 
-  for (var i = 0; i < 3; i++) {
-    if ((*ray_t).min < pIn[i]) {
-      (*ray_t).min = pIn[i];
-    }
+  let tmin = max(pIn.x, max(pIn.y, pIn.z));
+  let tmax = min(pOut.x, min(pOut.y, pOut.z));
 
-    if ((*ray_t).max > pOut[i]) {
-      (*ray_t).max = pOut[i];
-    }
-
-    if ((*ray_t).min > (*ray_t).max) {
-      return false;
-    }
-  }
-
-  return true;
+  return tmax > 0f && tmin <= tmax;
 }
 
-fn hittableList(r: Ray, ray_t: Interval, rec: ptr<function, HitRecord>) -> bool {
-  var tempRec: HitRecord;
+fn hittableList(r: Ray, ray_t: ptr<function, Interval>, rec: ptr<function, HitRecord>) -> bool {
   var hitAnything = false;
-  var closestSoFar = ray_t.max;
-  let len = arrayLength(&world);
+  var stack = makeSphereStack();
 
-  for (var i: u32 = 0u; i < len; i++) {
-    var object = world[i];
-    if (sphere_hit(r, genInterval(ray_t.min, closestSoFar), &tempRec, object)) {
+  push(&stack, world[0]);
+
+  while(!stackIsEmpty(stack)) {
+    let object = pop(&stack);
+
+    if (object.isObject == 0.0) {
+      if (aabbHit(r, genInterval((*ray_t).min, (*ray_t).max), object)) {
+        if (object.rightIndex >= 0.0) {
+          push(&stack, world[i32(object.rightIndex)]);
+        }
+
+        if (object.leftIndex >= 0.0) {
+          push(&stack, world[i32(object.leftIndex)]);
+        }
+      }
+
+      continue;
+    }
+
+    if (object.isObject == 1.0 && sphere_hit(r, genInterval((*ray_t).min, (*ray_t).max), rec, object)) {
       hitAnything = true;
-      closestSoFar = tempRec.t;
-      *rec = tempRec;
+      (*ray_t).max = (*rec).t;
     }
   }
 
@@ -331,10 +337,36 @@ fn intervalSurrounds(interval: Interval, x: f32) -> bool {
   return interval.min < x && x < interval.max;
 }
 
-fn swap(a: ptr<function, f32>, b: ptr<function, f32>) {
-  let c = *a;
-  (*a) = *b;
-  (*b) = c;
+fn swap(a: ptr<function, vec3f>, b: ptr<function, vec3f>, i: i32) {
+  let c = (*a)[i];
+  (*a)[i] = (*b)[i];
+  (*b)[i] = c;
+}
+
+/************************************** stack ***************************************/
+struct SphereStack {
+  top: i32,
+  S: array<Sphere, 32>
+}
+
+fn makeSphereStack() -> SphereStack {
+  var stack: SphereStack;
+  stack.top = -1;
+  return stack;
+}
+
+fn stackIsEmpty(stack: SphereStack) -> bool {
+  return select(false, true, stack.top == -1);
+}
+
+fn push(stack: ptr<function, SphereStack>, s: Sphere) {
+  (*stack).top += 1;
+  (*stack).S[(*stack).top] = s;
+}
+
+fn pop(stack: ptr<function, SphereStack>) -> Sphere {
+  (*stack).top -= 1;
+  return (*stack).S[(*stack).top + 1];
 }
 
 /**
